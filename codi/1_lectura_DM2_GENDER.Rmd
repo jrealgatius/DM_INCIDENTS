@@ -1,0 +1,205 @@
+---
+title: 'Caracterització de pacients DM2 incidents i diferencia entre genere'
+author: "Jordi Real"
+website: "https://github.com/USR-DAPCAT/"
+
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+
+
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    fig_caption: true
+    css: logos_css/usr_styles.css
+  pdf_document: default
+  word_document: default
+
+params:
+  fitxers_test: TRUE #FALSE #FALSE
+
+---
+
+
+&nbsp;
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src=\"https://www.idiapjgol.org/images/logo.png\" style=\"float: right ;width: 130px;\"/>')
+     $head.prepend('<img src=\"https://avatars2.githubusercontent.com/u/57066591?s=200&v=4\" style=\"margin-left:25% ;width: 80px;\"/>')
+     $head.prepend('<img src=\"logoDAP_Cat.png\" style=\"float: left:1;width: 185px;\"/>')
+   });
+</script>
+
+
+
+<div class="watermark">DRAFT</div>
+
+
+
+
+# FASE LECTURA
+
+>> Generacio de taula plana i aplicacio dels primers criteris inclusio 
+
+```{r setup, include = F}
+#rm(list=ls())
+library(dplyr)
+library(lubridate)
+
+# Funcions 
+# link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
+# devtools::source_url(link_source)
+
+source(here::here("../../../../Stat_codis","funcions_propies.R"))
+conductor<-here::here("conductor.xls")
+
+
+fitxer_cataleg<-"Cataleg.xlS"
+
+
+source(here::here("codi/funcions","Generar_taula_plana.R"))
+
+#
+```
+
+
+
+```{r}
+if (params$fitxers_test) {
+  dir_dades<-"dades/mostra"
+  dir_dades_prep<-"dades/mostra"                        
+  
+    } else {dir_dades<-"../../../DADES/EPIPEU_CAT3/dades"
+            dir_dades_prep<-"dades"}
+
+```
+
+
+
+## 1. Lectura 
+
+```{r}
+
+fitxer<-"epiPEUCAT_entregable_poblacio_20200206_104913.rds"
+dt_poblacio<-readRDS(here::here(dir_dades,fitxer))
+
+```
+
+
+```{r lectura_diagnostics}
+
+fitxer<-"epiPEUCAT_entregable_diagnostics_20200206_104913.rds"
+dt_diagnostics<-readRDS(here::here(dir_dades,fitxer))
+
+fitxer<-"epiPEUCAT_entregable_cmbdh_diagnostics_20200206_104913.rds"
+dt_cmbdh<-readRDS(here::here(dir_dades,fitxer))
+
+fitxer<-"epiPEUCAT_PX_entregable_cmbdh_diagnostics_20210104_131331.txt"
+dt_cmbdh2<-fread(here::here(dir_dades,fitxer))
+
+fitxer<-"epiPEUCAT_PX_entregable_cmbdh_procediments_20201211_095238.txt"
+dt_cmbdh_proc<-fread(here::here(dir_dades,fitxer))
+
+fitxer<-"epiPEUCAT_PX_entregable_cmbdh_procediments_20210104_131331.txt"
+dt_cmbdh_proc2<-fread(here::here(dir_dades,fitxer))
+
+```
+
+
+```{r generacio_dtindex}
+# Llegir cataleg
+dt_cataleg<-readxl::read_excel(here::here(fitxer_cataleg))
+
+# Selecciono codis DM2 
+codis_dm2<-dt_cataleg %>% filter(AGR1=="DM2") %>% select(domini,cod,agr=AGR1)
+
+
+# diagnosticats DM2 per e-cap  
+dt_temp<-
+  dt_diagnostics %>% select(idp,cod,dat) %>% 
+  semi_join(codis_dm2,by="cod") 
+
+# diagnosticats DM2 per cmbdh
+dt_temp2<-
+  dt_cmbdh %>% select(idp,cod,dat) %>% 
+  bind_rows(select(dt_cmbdh2,idp,cod,dat)) %>% 
+  semi_join(codis_dm2,by="cod") 
+  
+# 
+dt_index<-
+  dt_temp %>% bind_rows(dt_temp) %>% 
+  arrange(idp,dat) %>% group_by(idp) %>% slice(1) %>% ungroup() %>% select(idp,dtindex=dat) %>% 
+  filter(dtindex>=20170101 & dtindex<=20171231)
+
+```
+
+
+
+# Metode nou d'agregació
+
+
+```{r lectura_agregació}
+# defineixo arxius -------------------------
+
+# Diagnostics
+dt_diag_cmbdh<-dt_diagnostics %>% bind_rows(dt_cmbdh)
+
+# Farmacs
+fitxer<-"epiPEUCAT_entregable_farmacs_facturats_20200206_104913.rds"
+dt_farmacs<-readRDS(here::here(dir_dades,fitxer)) 
+
+# Variables
+fitxer<-"epiPEUCAT_entregable_variables_analitiques_20200206_104913.rds"
+dt_analitiques<-readRDS(here::here(dir_dades,fitxer))
+
+fitxer<-"epiPEUCAT_entregable_variables_cliniques_20200206_104913.rds"
+dt_cliniques<-readRDS(here::here(dir_dades,fitxer))
+
+# Tabac
+fitxer<-"epiPEUCAT_entregable_tabaquisme_20200206_104913.rds"
+dt_tabac<-readRDS(here::here(dir_dades,fitxer)) %>% mutate(agr="tabac") 
+
+
+```
+
+
+```{r generacio_taula_plana}
+
+
+# Obro parametres ------------------------
+dt_parametres<-read_excel(here::here(fitxer_cataleg),sheet = "parametres")
+
+# Genero taula plana  -------------------------
+taula_plana<-
+  Generar_taula_plana(dt_index,
+                      cataleg = here::here(fitxer_cataleg),
+                      parametres=here::here(fitxer_cataleg),sheet="parametres")
+
+
+
+```
+
+
+```{r fusio}
+
+# Fusiono amb dades
+dt_plana<-
+  dt_index %>% 
+  left_join(dt_poblacio,by=c("idp")) %>% 
+  left_join(taula_plana,by=c("idp","dtindex")) 
+
+
+
+```
+
+
+## 5. Salvar part1 
+
+```{r SALVAR}
+
+saveRDS(dt_plana, file=here::here(dir_dades_prep,"dt_plana.rds"))
+
+```
+

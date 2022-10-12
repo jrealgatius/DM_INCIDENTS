@@ -1,0 +1,892 @@
+---
+title: 'Caracterització de pacients DM2 incidents i diferencia entre generes'
+author: "Jordi Real"
+website: "https://github.com/USR-DAPCAT/"
+
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+
+
+output:
+  html_document:
+    # df_print: paged
+    toc: true
+    toc_float: true
+    fig_caption: true
+    css: logos_css/usr_styles.css
+
+params:
+  fitxers_test: TRUE #FALSE #FALSE
+---
+
+
+&nbsp;
+<script>
+   $(document).ready(function() {
+     $head = $('#header');
+     $head.prepend('<img src=\"https://www.idiapjgol.org/images/logo.png\" style=\"float: right ;width: 130px;\"/>')
+     $head.prepend('<img src=\"https://avatars2.githubusercontent.com/u/57066591?s=200&v=4\" style=\"margin-left:25% ;width: 80px;\"/>')
+     $head.prepend('<img src=\"logoDAP_Cat.png\" style=\"float: left:1;width: 185px;\"/>')
+   });
+</script>
+
+
+
+<div class="watermark">DRAFT</div>
+
+# Estat
+
+- Lectura de fitxers
+- Generació d'agregadors
+- Agregació de fitxers i fusió de taules
+- Aplanar base de dades
+- Construcció de conductor
+- Recodificacions 
+- Primer exploratori de variables generades
+
+
+# Fase exploratoria 
+
+Generació de taula plana i depuració de dades 
+
+
+```{r setup, include = FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo=F,message=F,warning=F)
+
+library(dplyr)
+library(lubridate)
+# Funcions 
+# link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
+# devtools::source_url(link_source)
+
+source(here::here("../../../../Stat_codis","funcions_propies.R"))
+source(here::here("../../../../Stat_codis","Scores.R"))
+
+# "https://github.com/jrealgatius/Stat_codis/Scores2.R"
+
+
+conductor<-here::here("conductor.xls")
+
+if (params$fitxers_test) {
+  dir_dades_prep<-"dades/mostra"                        
+  
+    } else {
+            dir_dades_prep<-"dades"}
+
+
+```
+
+
+```{r lectura, include=F}
+# 1 Lectura -----------
+dades<-readRDS(here::here(dir_dades_prep,"dt_plana.rds"))
+
+
+```
+
+
+```{r eval=FALSE}
+
+names(dades) %>% write.csv2("vars.csv")
+
+
+```
+
+
+```{r recodes,include=FALSE}
+
+
+# Recodificacions i calculs
+
+
+## Edad
+dades<-dades %>% mutate(age=as.numeric(lubridate::ymd(dtindex)-lubridate::ymd(dnaix))/365.25)
+
+# Diagnostics
+dades<-dades %>% mutate_at(vars(starts_with("DG.")),~if_else(.>0,"Yes","No",missing = "No"))
+
+# farmacs
+dades<-dades %>% mutate_at(vars(starts_with("FF.")),~if_else(.>0,"Yes","No",missing = "No"))
+
+#
+
+
+
+```
+
+
+
+
+```{r recode_missings, include=FALSE}
+
+dades<-dades %>% recode_to_missings(taulavariables = conductor,rang = "rang_valid")
+
+
+```
+
+```{r mescalculs, include=FALSE}
+
+dades<-
+  dades %>% mutate(age_cat4=cut2(age,c(50,65,75)),
+                 age_cat5=cut2(age,c(40,55,70,85)))
+
+
+
+
+```
+
+
+```{r autorecodes, include=FALSE}
+
+
+dades<-dades %>% recodificar(conductor,criteris = "recode")
+
+
+
+```
+
+
+```{r score2, include=FALSE}
+
+# source(here::here("codi/funcions","Scores.R"))
+
+# score2(sexe="D",age=56,smoke="N",sbp=120,dm="N",coltot=230,colhdl=51,risk_region="Low")
+
+
+dades<-dades %>% mutate(score2=score2(sex=sexe,
+                       age=age,
+                       smoke=tabac.valor,
+                       sbp=PAS.valor,dm="Y",coltot=cT.valor,colhdl=cHDL.valor,risk_region="Low"))
+
+dades<-dades %>% mutate(score2.post=score2(sex=sexe,
+                        age=age+1,
+                        smoke=tabac.valor.post,
+                        sbp=PAS.valor.post,
+                        dm="Y",
+                        coltot=cT.valor.post,
+                        colhdl=cHDL.valor.post,
+                        risk_region="Low"))
+
+
+# regicor <- function(age, sex, smoker, diabetes, coltot, colhdl, sbp, dbp, divide = 1)   
+
+dades<-dades %>% mutate(regicor=
+                   regicor(sex=sexe,
+                       age=age,
+                       smoker=tabac.valor,
+                       sbp=PAS.valor,
+                       dbp=PAD.valor,
+                       diabetes=1,coltot=cT.valor,colhdl=cHDL.valor))
+  
+
+dades<-dades %>% mutate(regicor.post=
+                   regicor(sex=sexe,
+                       age=age+1,
+                       smoker=tabac.valor.post,
+                       sbp=PAS.valor.post,
+                       dbp=PAD.valor.post,
+                       diabetes=1,coltot=cT.valor.post,colhdl=cHDL.valor.post))
+
+
+```
+
+
+```{r scores_canvis}
+
+# Calcul de diferencia / canvis scores2
+
+dades<-dades %>% mutate(score2_dif=score2.post-score2,regicor_dif=regicor.post-regicor)
+
+
+```
+
+
+
+
+```{r, include=FALSE}
+
+dades<-dades %>% 
+  mutate(dies_FU=(ymd(sortida)-ymd(dtindex)) %>% as.numeric)
+
+# 
+mean(dades$dies_FU)
+median(dades$dies_FU)
+min(dades$dies_FU)
+max(dades$dies_FU)
+
+
+dades %>% select(dies_FU)
+
+
+```
+
+
+
+```{r tractaments_AD, include=TRUE}
+#     a)  ADNI (o NIAD): metformina, Secretagogos (SU o repaglinida), iSGLT2, arGLP1 (que pot ser oral o injectable), pioglitazona, iDPP4.  Olvidat del concepte de ADO (que serien els ADNI's menys els arGLP1 injectables)
+#     b) Insulines (que poden ser rapides, intermitges, lentes o barreges)
+# - o be per politica de tractament (pautes)
+#     a) nomes dieta i exercici (no prenen cap fàrmac)
+#     b) monoterapia: qualsevol ADNI
+#     c) COMBO
+#              c1) pot ser combinació de 2 o més ADNIS
+#              c2) combinació de un ADNI amb insulina
+#     d) Insulines (sola)
+
+
+
+farmacs_ADNI<-c("FF.post.BG_Metformina","FF.post.SULFO", "FF.post.GLI_Repaglinida","FF.post.SGLT2","FF.post.GLP1","FF.post.TZD_Pioglitazona",
+                "FF.post.DPP4")
+
+# "FF.post.INSULINA"
+# dades %>% select(farmacs_ADNI)
+
+
+dt_temp <- dades %>% mutate(
+  Num_ADNIS = rowSums(across(farmacs_ADNI)=="Yes",na.rm = T),
+  Num_ADNIS,
+  Tractament_AD.post= case_when(
+            Num_ADNIS==0 & FF.post.INSULINA=="No" ~ 0,
+            Num_ADNIS==1 & FF.post.INSULINA=="No" ~ 1,
+            Num_ADNIS>1 & FF.post.INSULINA=="No" ~ 2,
+            Num_ADNIS==0 & FF.post.INSULINA=="Yes" ~ 3,
+            Num_ADNIS>=1 & FF.post.INSULINA=="Yes" ~ 4, 
+            TRUE ~ 0))
+
+
+
+###### Farmacs post
+
+farmacs_ADNI<-c("FF.365.BG_Metformina","FF.365.SULFO", "FF.365.GLI_Repaglinida","FF.365.SGLT2","FF.365.GLP1","FF.365.TZD_Pioglitazona",
+                "FF.365.DPP4")
+# "FF.post.INSULINA"
+# dades %>% select(farmacs_ADNI)
+
+dt_temp <- dt_temp %>% mutate(
+  Num_ADNIS.365 = rowSums(across(farmacs_ADNI)=="Yes",na.rm = T),
+  Num_ADNIS.365,
+  Tractament_AD.365= case_when(
+            Num_ADNIS.365==0 & FF.365.INSULINA=="No" ~ 0,
+            Num_ADNIS.365==1 & FF.365.INSULINA=="No" ~ 1,
+            Num_ADNIS.365>1 & FF.365.INSULINA=="No" ~ 2,
+            Num_ADNIS.365==0 & FF.365.INSULINA=="Yes" ~ 3,
+            Num_ADNIS.365>=1 & FF.365.INSULINA=="Yes" ~ 4, 
+            TRUE ~ 0))
+
+dades<-dt_temp
+
+
+
+
+```
+
+
+
+```{r nivells_optims_prepost}
+
+# -Nivells òptims HbA1c<7%
+# -Nivells òptims PA<130/80. En majors de 65 s'accepta PA<140/80
+# -Nivells òptims Lípids:
+#                 -Risc moderat LDL<100mg/dL
+#                 -Risc alt LDL<70mg/dL
+#                 -Risc molt alt LDL<55mg/dL
+# 
+# -Interessaria veure quants fan tractament hipertensiu en IECA o ARAII i quants combinat amb IECA o ARAII + Bloquejant del Calci o diürètic i quants amb tractament assoleixen o no nivells òptims.
+# 
+# -També quants fan estatines, quants estatines+ezetimiba o altres hipolipemiants i si assoleixen o no nivells òptims.
+# 
+# -Assoliment objectiu multifactorial HBA1c, PA, lípids i amb els de risc alt/molt alt si prenen AAG.
+
+
+# Objectius CV Basal i any de seguiment
+
+dt_temp<-dades %>% 
+  mutate(HBA1C7_cat = if_else(GLICADA.valor<7,1,0),
+         
+         PA_cat= case_when(age<65 & (PAS.valor<130 & PAD.valor<80)~1 ,
+                            age<65 & (PAS.valor>=130 | PAD.valor>=80)~0,
+                            age>=65 & (PAS.valor<140 & PAD.valor<80)~1,
+                            age>=65 & (PAS.valor>=140 | PAD.valor>=80)~0
+                            )) 
+
+# Objectius post durant seguiment
+
+dt_temp<-dt_temp %>% 
+  mutate(HBA1C7_cat.post = if_else(GLICADA.valor.post<7,1,0),
+         
+         age_pas=age + (-PAS.dies.y/365.25), # Actualitzo edad en dia de la PAS
+         
+         PA_cat.post= case_when(age_pas<65 & (PAS.valor.post<130 & PAD.valor.post<80)~1 ,
+                            age_pas<65 & (PAS.valor.post>=130 | PAD.valor.post>=80)~0,
+                            age_pas>=65 & (PAS.valor.post<140 & PAD.valor.post<80)~1,
+                            age_pas>=65 & (PAS.valor.post>=140 | PAD.valor.post>=80)~0
+                            )
+         ) 
+
+#
+
+
+dades<-dt_temp
+
+```
+
+
+```{r}
+
+# Categorias de riesgo CV (Alt-Molt alt, Moderat): 
+
+dt_temp<-
+  dades %>% 
+  select(idp,age, DG.HTA, DG.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP) %>% 
+  mutate(frisc1=if_else(age>50,1,0,missing = 0),
+         frisc2=if_else(DG.HTA=="Yes",1,0,missing = 0),
+         frisc3=if_else(DG.DIS=="Yes",1,0,missing = 0),
+         frisc4=if_else(tabac.valor==1,1,0,missing = 0),
+         frisc5=if_else(IMC.valor>=30,1,0,missing = 0)) %>% 
+  mutate(num_frisc=frisc1+frisc2+frisc3+frisc4+frisc5) %>% 
+  
+  mutate(
+    risc_CVD_cat=case_when(
+    
+    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor>300 | CKDEPI.valor<30) |
+    
+    num_frisc>=3~1, 
+    
+    TRUE~0
+    )
+    ) %>% 
+  
+  select(idp,num_frisc,risc_CVD_cat,age, DG.HTA, DG.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP ) %>% 
+  select(idp,risc_CVD_cat)
+
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+
+
+```
+
+```{r}
+
+# Categorias de riesgo CV (Alt-Molt alt, Moderat): 
+
+
+dt_temp<-
+  dades %>% 
+  select(idp,age, DG.HTA, DG.DIS , tabac.valor.post, IMC.valor.post, CAC.valor.post, CKDEPI.valor.post, DG.AVC, DG.CI, DG.AP) %>% 
+  mutate(frisc1=if_else(age+1>50,1,0,missing = 0),
+         frisc2=if_else(DG.HTA=="Yes",1,0,missing = 0),
+         frisc3=if_else(DG.DIS=="Yes",1,0,missing = 0),
+         frisc4=if_else(tabac.valor.post==1,1,0,missing = 0),
+         frisc5=if_else(IMC.valor.post>=30,1,0,missing = 0)) %>% 
+  mutate(num_frisc=frisc1+frisc2+frisc3+frisc4+frisc5) %>% 
+  
+  mutate(
+    risc.post_CVD_cat=case_when(
+    
+    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor.post>300 | CKDEPI.valor.post<30) |
+    
+    num_frisc>=3~1, 
+    TRUE~0
+    ) ) %>% select(idp,risc.post_CVD_cat)
+
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+
+
+
+```
+
+```{r prevSecundaria}
+
+
+dades<-dades %>% mutate(DG.PrevSec=if_else(DG.AVC_NH=="Yes" | DG.CI=="Yes" | DG.AP=="Yes","Yes","No"))
+
+
+```
+
+
+```{r scores_missing, include=FALSE}
+
+dades<-dades %>% mutate(score2=if_else(DG.PrevSec=="No",score2,NA_real_),
+                 score2.post=if_else(DG.PrevSec=="No",score2.post,NA_real_),
+                 score2_dif=if_else(DG.PrevSec=="No",score2_dif,NA_real_)) 
+
+```
+
+
+
+```{r Nivells_optims_lipids, eval=TRUE}
+# VAriable Nivells òptims de lipids
+
+# LDL_cat
+
+dt_temp<- dades %>% select(idp,cLDL.valor,DG.PrevSec) %>% 
+  mutate(LDL55PrevS_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor<55~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor>=55~ 0),
+     
+         LDL70PrevS_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor<70~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor>=70~ 0),
+         
+         LDL100PrevS_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor<100~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor>=100~ 0),
+         
+         LDL100PrevP_cat=case_when(DG.PrevSec=="No" & cLDL.valor<100~ 1,
+                                  DG.PrevSec=="No" & cLDL.valor>=100~ 0),
+ 
+         LDL130PrevP_cat=case_when(DG.PrevSec=="No" & cLDL.valor<130~ 1,
+                                  DG.PrevSec=="No" & cLDL.valor>=130~ 0)
+
+         ) %>% 
+  select(idp,LDL55PrevS_cat,LDL70PrevS_cat,LDL100PrevS_cat,LDL100PrevP_cat,LDL130PrevP_cat)
+
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+
+# Post
+dt_temp<- dades %>% select(idp,cLDL.valor.post,DG.PrevSec) %>% 
+  mutate(LDL55PrevS.post_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor.post<55~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor.post>=55~ 0),
+     
+         LDL70PrevS.post_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor.post<70~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor.post>=70~ 0),
+         
+         LDL100PrevS.post_cat=case_when(DG.PrevSec=="Yes" & cLDL.valor.post<100~ 1,
+                                  DG.PrevSec=="Yes" & cLDL.valor.post>=100~ 0),
+         
+         LDL100PrevP.post_cat=case_when(DG.PrevSec=="No" & cLDL.valor.post<100~ 1,
+                                  DG.PrevSec=="No" & cLDL.valor.post>=100~ 0),
+ 
+         LDL130PrevP.post_cat=case_when(DG.PrevSec=="No" & cLDL.valor.post<130~ 1,
+                                  DG.PrevSec=="No" & cLDL.valor.post>=130~ 0)
+
+         ) %>% 
+  select(idp,LDL55PrevS.post_cat,LDL70PrevS.post_cat,LDL100PrevS.post_cat,LDL100PrevP.post_cat,LDL130PrevP.post_cat)
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+```
+
+
+```{r Nivells_optims_lipids_cat, eval=TRUE}
+
+# Recodificar 
+
+vars_vector<-
+  c("LDL55PrevS_cat","LDL70PrevS_cat","LDL100PrevS_cat","LDL100PrevP_cat","LDL130PrevP_cat","LDL55PrevS.post_cat","LDL70PrevS.post_cat","LDL100PrevS.post_cat","LDL100PrevP.post_cat","LDL130PrevP.post_cat")
+
+dades<-dades %>% mutate_at(vars_vector,~if_else(.==1,"Yes","No")) 
+
+
+```
+
+
+```{r Nivells_optims_lipids2, eval=FALSE}
+
+
+# VAriable Nivells òptims de lipids
+
+# LDL_cat
+
+dt_temp<- dades %>% select(idp,risc_CVD_cat,cLDL.valor) %>% 
+  mutate(LDL55PrevS_cat=case_when(risc_CVD_cat==1 & cLDL.valor<55~ 1,
+                                  risc_CVD_cat==1 & cLDL.valor>=55~ 0),
+     
+         LDL70PrevS_cat=case_when(risc_CVD_cat==1 & cLDL.valor<70~ 1,
+                                  risc_CVD_cat==1 & cLDL.valor>=70~ 0),
+         
+         LDL100PrevP_cat=case_when(risc_CVD_cat==0 & cLDL.valor<100~ 1,
+                                  risc_CVD_cat==0 & cLDL.valor>=100~ 0),
+         ) %>% 
+  select(idp,LDL55PrevS_cat,LDL70PrevS_cat,LDL100PrevP_cat)
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+  
+# Post
+dt_temp<- dades %>% select(idp,risc.post_CVD_cat,cLDL.valor.post) %>% 
+  mutate(LDL55PrevS.post_cat=case_when(risc.post_CVD_cat==1 & cLDL.valor.post<55~ 1,
+                                  risc.post_CVD_cat==1 & cLDL.valor.post>=55~ 0),
+     
+         LDL70PrevS.post_cat=case_when(risc.post_CVD_cat==1 & cLDL.valor.post<70~ 1,
+                                  risc.post_CVD_cat==1 & cLDL.valor.post>=70~ 0),
+         
+         LDL100PrevP.post_cat=case_when(risc.post_CVD_cat==0 & cLDL.valor.post<100~ 1,
+                                  risc.post_CVD_cat==0 & cLDL.valor.post>=100~ 0),
+         ) %>% 
+  select(idp,LDL55PrevS.post_cat,LDL70PrevS.post_cat,LDL100PrevP.post_cat)
+
+dades<-dades %>% left_join(dt_temp,by="idp")
+
+
+```
+
+
+
+
+
+```{r recodes2,include=FALSE}
+
+dades<-dades %>% etiquetar_valors(variables_factors = conductor,fulla = "labels",camp_etiqueta="etiqueta")
+
+
+```
+
+
+
+# Flow chart 1
+
+```{r filtres,include=TRUE}
+# Criteris inclusió/ d'exclusió
+
+
+# 1. S'exclouen aquells amb Antidiabetic
+var_temp<-extreure.variables("Antidiab",taulavariables = conductor)
+
+# Exclosos FF.antidiab (Excepte metformina)
+dades<-
+  comptar_valors(dades,variables=var_temp,valor="Yes") %>% 
+  mutate(FF.Antidiab=if_else(num_valors>0,"Yes","No")) %>% 
+  select(-num_valors)
+
+# 2. S'exclouen aquells DM1 previ 
+# dades %>% group_by(DG.DM1) %>% count()
+# dades %>% filter(age<30 | age>100) %>% select(age,DG.DM1,FF.Antidiab)
+
+# 3. Exclusió (Menys 1 any a SIDIAP)
+dades<-dades %>% mutate(dies_sidiap=(ymd(dtindex)-ymd(entrada)) %>% as.numeric())
+
+# FLOW CHART 
+# dades %>% criteris_exclusio_diagrama(taulavariables =here::here("Conductor.xls") ,sheet="criteris_exclusio",
+#                                      criteris = "exclusio",ordre = "id",etiquetes = "descripcio",sequencial=F)
+# 
+
+source(here::here("codi/funcions","Flow_chart_ggconsort.R"))
+
+# Flow chart nou
+
+Generar_flow_chart_consort(dt=dades,
+                           taulavariables = here::here("Conductor.xls"),
+                           sheet="criteris_exclusio",
+                           criteris="exclusio1", 
+                           labels = "descripcio", 
+                           sequencial = F, 
+                           lab_start = "Mostra elegible",
+                           lab_random = "Mostra analitzada")
+
+
+```
+
+
+
+
+```{r aplico_filtres,include=FALSE}
+
+# Aplico criteris 
+
+dades_prematch<-dades %>% criteris_exclusio(
+  taulavariables = here::here("Conductor.xls") ,sheet="criteris_exclusio",
+                                     criteris="exclusio")
+
+
+
+
+```
+
+
+```{r matching_edat, include=F}
+
+dt_temp<-
+  dades_prematch %>% 
+  mutate(age_cat=cut2(age,g=30))
+
+
+descrTable(sexe~age,data=dt_temp)
+
+set.seed(123)
+
+m.out<-MatchIt::matchit(as.formula(sexe=="D"~age),data=dt_temp,exact=c("age_cat","DG.PrevSec"),
+                        ratio=1,discard = "both")
+
+dt_temp<-dt_temp %>% bind_cols(ps=m.out$weights) 
+dadesMatch<-dt_temp %>% filter(ps==1) %>% select(-ps)
+
+descrTable(sexe~age + DG.PrevSec ,data=dadesMatch)
+
+
+# Fusion matching
+dades<-dades %>% left_join(select(dt_temp,idp,ps),by="idp")
+
+
+
+```
+
+
+
+# Flow - chart post paired 
+
+```{r}
+
+# FLOW CHART 
+dt_temp<-dades
+
+# dt_temp %>% criteris_exclusio_diagrama(taulavariables =here::here("Conductor.xls") ,sheet="criteris_exclusio",
+#                                      criteris = "aparellament",ordre = "id",etiquetes = "descripcio",sequencial=F,
+#                                      grups="sexe")
+
+
+dt_temp %>% 
+  Generar_flow_chart_consort(taulavariables =here::here("Conductor.xls"),
+                             sheet="criteris_exclusio",
+                             criteris = "exclusio2",grups = "sexe",
+                             labels = "descripcio",
+                             lab_start = "Mostra elegible",
+                             lab_random = "Mostra analitzada")
+
+
+
+# Aplico filtre definitiu ps==1
+
+dades<-dadesMatch
+
+
+```
+
+
+
+```{r etiquetar,include=FALSE}
+
+dades <- dades %>% etiquetar(taulavariables = conductor)
+
+dades_prematch <- dades_prematch %>% etiquetar(taulavariables = conductor)
+
+
+```
+
+
+
+
+```{r salvar_dades, eval=FALSE}
+
+dades %>% foreign::write.dta(here::here("dades/compartides","dades_dm.dta"))
+
+dades %>% writexl::write_xlsx(here::here("dades/compartides","dades_dm.xlsx"))
+
+
+
+
+```
+
+
+# Descriptiu exploratori de variables generades 
+
+
+## Descriptiu pre aparellament
+
+```{r,include=TRUE}
+
+
+# formu<-formula.text("Taula1",y="sexe",taulavariables = conductor,eliminar = "age_cat5")
+ 
+# descrTable(formu,data=dades_prematch,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
+#   export2md()
+
+descrTable("sexe ~ age + age_cat4 + DG.AP + DG.AVC_H + DG.AVC_NH + DG.CI + DG.DIS + DG.HTA + DG.IC + DG.AVC + DG.PrevSec + FF.ALTRES_AAG + FF.ALTRESDIS + FF.ALTRESHTA + FF.ANT_VITK + FF.ANTCA + FF.ARA2 + FF.BBK + FF.BG_Metformina + FF.CLOPI + FF.DIPI + FF.DIURETIC + FF.ESTATINA + FF.ESTATINA_COMB + FF.EZE + FF.FIBRAT + FF.IECA + FF.AAG + FF.ANTIHTA + FF.HIPOLIP + ALCOHOL.valor + CAC.valor + cHDL.valor + CKDEPI.valor + cLDL.valor + CREATININA.valor + cT.valor + EXCPROTEINA.valor + GLICADA.valor + GLUCOSA.valor + IMC.valor + IMC.valor.cat5 + PAD.valor + PAS.valor + PES.valor + TALLA.valor + TG.valor + score2 + regicor + PA_cat + HBA1C7_cat + risc_CVD_cat + LDL55PrevS_cat + LDL70PrevS_cat + LDL100PrevS_cat + LDL100PrevP_cat + LDL130PrevP_cat + tabac.valor",data=dades_prematch,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% export2md()
+
+
+
+
+
+```
+
+
+
+
+```{r taula_resum, include=TRUE,echo=FALSE, warning=FALSE,eval=FALSE}
+
+formu<-formula.text("Baseline",y="",taulavariables = conductor)
+
+descrTable(formu,data=dades,method = 2,Q1=0,Q3=1,extra.labels = c("","",""), hide = "No") %>% 
+  export2md()
+
+
+```
+
+
+
+# Comparativa per generes post aparellament
+
+```{r comparativapre, include=TRUE,echo=FALSE, warning=FALSE}
+
+
+formu<-formula.text("Taula1",y="sexe",taulavariables = conductor)
+
+
+descrTable(formu,data=dades,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
+  export2md()
+
+
+
+
+
+
+```
+
+
+```{r}
+
+dt_temp<-dades %>% filter(DG.PrevSec=="Yes")
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
+  export2md()
+
+
+
+dt_temp<-dades %>% filter(DG.PrevSec=="No")
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
+  export2md()
+
+
+
+
+```
+
+
+
+# Descriptiva en seguiment
+
+## Tractaments post (1 any després del debut de la diabetis)
+
+
+DESCRIPTIVA DEL SEGUIMENT
+
+```{r include=TRUE,echo=FALSE, warning=FALSE}
+
+dt_temp<-dades
+
+formu<-formula.text("farmacs_post",y="sexe",taulavariables = conductor)
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), show.p.overall = F,show.n = T) %>% 
+  export2md()
+
+
+
+```
+
+
+## Determinacions post (1 any després del debut de la diabetis)
+
+```{r include=TRUE,echo=FALSE, warning=FALSE}
+
+dt_temp<-dades
+
+formu<-formula.text("vars_post",y="sexe",taulavariables = conductor)
+
+
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
+  export2md()
+
+
+```
+
+## Tractament post a l'any i control óptim despres del debut DM
+
+```{r}
+
+
+dt_temp<-dades
+
+formu<-formula.text("Outcome",y="sexe",taulavariables = conductor)
+
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
+  export2md()
+
+
+
+
+```
+
+## Tractament a l'any despres del debut DM
+
+```{r}
+
+dt_temp<-dades
+
+formu<-formula.text("fxAD365",y="sexe",taulavariables = conductor)
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
+  export2md()
+
+
+formu<-formula.text("fxCV365",y="sexe",taulavariables = conductor)
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
+  export2md()
+
+
+```
+
+
+
+```{r, eval=FALSE}
+
+# Figura de l'evolutiu DE VALORS
+
+
+dades %>% select(sexe,score2,score2.post,score2_dif, situacio) %>% na.omit() %>% 
+  
+
+
+ggplot2::ggplot()
+
+table(dades$situacio,dades$sexe)
+
+dades %>% select(dtindex,sortida) %>% mutate(dies_FU=(ymd(sortida)-ymd(dtindex)) %>% as.numeric)
+
+
+
+# preparacio de dades 
+
+pp<-dades %>% 
+  transmute(idp,sexe,dtindex,val0=cLDL.valor,val1=cLDL.valor.post,dat0=ymd(dtindex)-cHDL.dies.x,datfinal=ymd(dtindex)-cLDL.dies.y) %>% 
+  na.omit() %>% 
+  group_by(grup=sexe) %>% 
+    summarise(t0=mean(ymd(dat0)), 
+              t1=mean(ymd(datfinal)),
+            dtindex=mean(ymd(dtindex)),
+            val0=mean(val0),
+            val1=mean(val1)) %>% ungroup()
+            
+
+# Punts HbA1c(%)
+temp1<-pp %>% pivot_longer(c(t0,t1),names_to = "time",values_to = "data")  %>% select(grup,time,data) 
+temp2<-pp %>% pivot_longer(c(val0,val1),names_to = "Valor",values_to = "LDL")  %>% select(LDL)
+
+# Cooredenades finestra 
+temp3<-pp %>% select(grup,data0=t0,data_inclusio=dtindex,val0,val1)
+
+# fusiono tot 
+temp4<-temp1 %>% bind_cols(temp2) %>% left_join(temp3,by="grup")
+
+temp4 %>% 
+   ggplot(aes(x=data,y=LDL,color=grup)) + 
+   geom_line() +
+   ylim(c(7,8.5)) + 
+   geom_segment(aes(x =data0, xend=dataUltimHB, y =valorfinalHB-0.10, yend = valorfinalHB-0.10),size=10.5,alpha = 0.1) +
+   geom_point(aes(x=data_inclusio, y=valorfinalHB), size=4)
+
+
+
+```
+
+
+
+
+&nbsp;
+<hr />
+<p style="text-align: center;">A work by $Jordi Real$ $Rai Puig$ </a></p>
+<p style="text-align: center;">$Llepali System$ </a></p>
+<p style="text-align: center;"><span style="color: #808080;"><em><https://github.com/USR-DAPCAT/></em></span></p>
+
+
+
+
