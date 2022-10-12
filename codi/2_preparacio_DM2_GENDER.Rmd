@@ -54,12 +54,16 @@ knitr::opts_chunk$set(echo=F,message=F,warning=F)
 
 library(dplyr)
 library(lubridate)
-# Funcions 
-# link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
-# devtools::source_url(link_source)
+# Funcions
+link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
+devtools::source_url(link_source)
 
-source(here::here("../../../../Stat_codis","funcions_propies.R"))
-source(here::here("../../../../Stat_codis","Scores.R"))
+link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/Scores.R","?raw=T")
+devtools::source_url(link_source)
+
+# 
+# source(here::here("../../../../Stat_codis","funcions_propies.R"))
+# source(here::here("../../../../Stat_codis","Scores.R"))
 
 # "https://github.com/jrealgatius/Stat_codis/Scores2.R"
 
