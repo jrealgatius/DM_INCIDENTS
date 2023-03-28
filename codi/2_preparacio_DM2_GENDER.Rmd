@@ -1,21 +1,18 @@
 ---
-title: 'Caracterització de pacients DM2 incidents i diferencia entre generes'
+title: "Caracterització de pacients DM2 incidents i diferencia entre generes"
 author: "Jordi Real"
-website: "https://github.com/USR-DAPCAT/"
-
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-
-
 output:
   html_document:
-    # df_print: paged
-    toc: true
-    toc_float: true
-    fig_caption: true
+    toc: yes
+    toc_float: yes
+    fig_caption: yes
     css: logos_css/usr_styles.css
-
+  word_document:
+    toc: yes
+website: "https://github.com/USR-DAPCAT/"
 params:
-  fitxers_test: TRUE #FALSE #FALSE
+  fitxers_test: yes
 ---
 
 
@@ -54,12 +51,25 @@ knitr::opts_chunk$set(echo=F,message=F,warning=F)
 
 library(dplyr)
 library(lubridate)
+library(FormatGe)
+library(compareGroups)
+library(kableExtra)
+library(purrr)
 # Funcions
-link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
-devtools::source_url(link_source)
 
+# devtools::install_github("USR-DAPCAT/FormatGe")
+# devtools::install_github("USR-DAPCAT/Macedonia")
+
+
+# link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/funcions_propies.R","?raw=T")
+# devtools::source_url(link_source)
+
+# library(FormatGe)
 link_source<-paste0("https://github.com/jrealgatius/Stat_codis/blob/master/Scores.R","?raw=T")
 devtools::source_url(link_source)
+
+
+source("funcions/globals_stat_codis.R")
 
 # 
 # source(here::here("../../../../Stat_codis","funcions_propies.R"))
@@ -127,19 +137,17 @@ dades<-dades %>% recode_to_missings(taulavariables = conductor,rang = "rang_vali
 
 ```
 
-```{r mescalculs, include=FALSE}
+```{r mescalculs, include=F}
 
 dades<-
-  dades %>% mutate(age_cat4=cut2(age,c(50,65,75)),
-                 age_cat5=cut2(age,c(40,55,70,85)))
-
-
+  dades %>% mutate(age_cat4=Hmisc::cut2(age,c(50,65,75)),
+                 age_cat5=Hmisc::cut2(age,c(40,55,70,85)))
 
 
 ```
 
 
-```{r autorecodes, include=FALSE}
+```{r autorecodes, include=F,message=TRUE}
 
 
 dades<-dades %>% recodificar(conductor,criteris = "recode")
@@ -469,58 +477,51 @@ dades<-dades %>% left_join(dt_temp,by="idp")
 ```
 
 
+```{r malcontrolCV,eval=TRUE}
+
+
+# Mal control detectat post
+
+dt_temp<-
+  dades %>% 
+  # select(LDL70PrevS.post_cat,LDL100PrevP.post_cat, HBA1C7_cat.post,PAD.valor.post, PAS.valor.post) %>% 
+  
+  mutate(mal_controlCV.post= case_when(
+    LDL70PrevS.post_cat==0 | LDL100PrevP.post_cat==0 | HBA1C7_cat.post==0 | (PAD.valor.post>=140 & PAS.valor.post>=90)~1,
+    TRUE~0))
+
+
+dades<-dt_temp
+
+# # Mal control detectat pre
+# 
+# dt_temp<-
+#   dades %>% 
+#   select(LDL70PrevS_cat,LDL100PrevP_cat, HBA1C7_cat,PAD.valor, PAS.valor) %>% 
+#   
+#   mutate(mal_controlCV= case_when(
+#     LDL70PrevS_cat==0 | LDL100PrevP_cat==0 | HBA1C7_cat==0 | (PAD.valor>=140 & PAS.valor>=90)~1,
+#     TRUE~0
+#     
+#   ))
+
+
+
+```
+
+
 ```{r Nivells_optims_lipids_cat, eval=TRUE}
 
 # Recodificar 
 
 vars_vector<-
-  c("LDL55PrevS_cat","LDL70PrevS_cat","LDL100PrevS_cat","LDL100PrevP_cat","LDL130PrevP_cat","LDL55PrevS.post_cat","LDL70PrevS.post_cat","LDL100PrevS.post_cat","LDL100PrevP.post_cat","LDL130PrevP.post_cat")
+  c("LDL55PrevS_cat","LDL70PrevS_cat","LDL100PrevS_cat","LDL100PrevP_cat","LDL130PrevP_cat","LDL55PrevS.post_cat","LDL70PrevS.post_cat","LDL100PrevS.post_cat","LDL100PrevP.post_cat","LDL130PrevP.post_cat",
+    "mal_controlCV.post")
 
 dades<-dades %>% mutate_at(vars_vector,~if_else(.==1,"Yes","No")) 
 
 
 ```
-
-
-```{r Nivells_optims_lipids2, eval=FALSE}
-
-
-# VAriable Nivells òptims de lipids
-
-# LDL_cat
-
-dt_temp<- dades %>% select(idp,risc_CVD_cat,cLDL.valor) %>% 
-  mutate(LDL55PrevS_cat=case_when(risc_CVD_cat==1 & cLDL.valor<55~ 1,
-                                  risc_CVD_cat==1 & cLDL.valor>=55~ 0),
-     
-         LDL70PrevS_cat=case_when(risc_CVD_cat==1 & cLDL.valor<70~ 1,
-                                  risc_CVD_cat==1 & cLDL.valor>=70~ 0),
-         
-         LDL100PrevP_cat=case_when(risc_CVD_cat==0 & cLDL.valor<100~ 1,
-                                  risc_CVD_cat==0 & cLDL.valor>=100~ 0),
-         ) %>% 
-  select(idp,LDL55PrevS_cat,LDL70PrevS_cat,LDL100PrevP_cat)
-
-dades<-dades %>% left_join(dt_temp,by="idp")
-  
-# Post
-dt_temp<- dades %>% select(idp,risc.post_CVD_cat,cLDL.valor.post) %>% 
-  mutate(LDL55PrevS.post_cat=case_when(risc.post_CVD_cat==1 & cLDL.valor.post<55~ 1,
-                                  risc.post_CVD_cat==1 & cLDL.valor.post>=55~ 0),
-     
-         LDL70PrevS.post_cat=case_when(risc.post_CVD_cat==1 & cLDL.valor.post<70~ 1,
-                                  risc.post_CVD_cat==1 & cLDL.valor.post>=70~ 0),
-         
-         LDL100PrevP.post_cat=case_when(risc.post_CVD_cat==0 & cLDL.valor.post<100~ 1,
-                                  risc.post_CVD_cat==0 & cLDL.valor.post>=100~ 0),
-         ) %>% 
-  select(idp,LDL55PrevS.post_cat,LDL70PrevS.post_cat,LDL100PrevP.post_cat)
-
-dades<-dades %>% left_join(dt_temp,by="idp")
-
-
-```
-
 
 
 
@@ -532,6 +533,13 @@ dades<-dades %>% etiquetar_valors(variables_factors = conductor,fulla = "labels"
 
 ```
 
+```{r}
+
+dades<-dades %>% refcat(conductor,ref="ref_cat")
+
+
+
+```
 
 
 # Flow chart 1
@@ -561,11 +569,14 @@ dades<-dades %>% mutate(dies_sidiap=(ymd(dtindex)-ymd(entrada)) %>% as.numeric()
 #                                      criteris = "exclusio",ordre = "id",etiquetes = "descripcio",sequencial=F)
 # 
 
-source(here::here("codi/funcions","Flow_chart_ggconsort.R"))
+# source(here::here("codi/funcions","Flow_chart_ggconsort.R"))
 
 # Flow chart nou
 
-Generar_flow_chart_consort(dt=dades,
+# devtools::install_github("jrealgatius/ggflowchart")
+# ggflowchart::Generar_flow_chart_consort()
+
+ggflowchart::Generar_flow_chart_consort(dt=dades,
                            taulavariables = here::here("Conductor.xls"),
                            sheet="criteris_exclusio",
                            criteris="exclusio1", 
@@ -573,6 +584,8 @@ Generar_flow_chart_consort(dt=dades,
                            sequencial = F, 
                            lab_start = "Mostra elegible",
                            lab_random = "Mostra analitzada")
+
+
 
 
 ```
@@ -584,11 +597,11 @@ Generar_flow_chart_consort(dt=dades,
 
 # Aplico criteris 
 
+
+
 dades_prematch<-dades %>% criteris_exclusio(
   taulavariables = here::here("Conductor.xls") ,sheet="criteris_exclusio",
                                      criteris="exclusio")
-
-
 
 
 ```
@@ -598,7 +611,7 @@ dades_prematch<-dades %>% criteris_exclusio(
 
 dt_temp<-
   dades_prematch %>% 
-  mutate(age_cat=cut2(age,g=30))
+  mutate(age_cat=Hmisc::cut2(age,g=30))
 
 
 descrTable(sexe~age,data=dt_temp)
@@ -608,14 +621,16 @@ set.seed(123)
 m.out<-MatchIt::matchit(as.formula(sexe=="D"~age),data=dt_temp,exact=c("age_cat","DG.PrevSec"),
                         ratio=1,discard = "both")
 
-dt_temp<-dt_temp %>% bind_cols(ps=m.out$weights) 
-dadesMatch<-dt_temp %>% filter(ps==1) %>% select(-ps)
+dadesMatch<-MatchIt::get_matches(m.out)
+
+# dt_temp<-dt_temp %>% bind_cols(ps=m.out$weights) 
+# dadesMatch<-dt_temp %>% filter(ps==1) %>% select(-ps)
 
 descrTable(sexe~age + DG.PrevSec ,data=dadesMatch)
 
 
 # Fusion matching
-dades<-dades %>% left_join(select(dt_temp,idp,ps),by="idp")
+dades<-dades %>% left_join(select(dadesMatch,idp,ps=weights),by="idp")
 
 
 
@@ -636,13 +651,13 @@ dt_temp<-dades
 
 
 dt_temp %>% 
-  Generar_flow_chart_consort(taulavariables =here::here("Conductor.xls"),
+  ggflowchart::Generar_flow_chart_consort(taulavariables =here::here("Conductor.xls"),
                              sheet="criteris_exclusio",
-                             criteris = "exclusio2",grups = "sexe",
+                             criteris = "exclusio2",
+                             grups = "sexe",
                              labels = "descripcio",
                              lab_start = "Mostra elegible",
                              lab_random = "Mostra analitzada")
-
 
 
 # Aplico filtre definitiu ps==1
@@ -686,12 +701,13 @@ dades %>% writexl::write_xlsx(here::here("dades/compartides","dades_dm.xlsx"))
 ```{r,include=TRUE}
 
 
-# formu<-formula.text("Taula1",y="sexe",taulavariables = conductor,eliminar = "age_cat5")
+formu<-formula_text("Taula1",y="sexe",taulavariables = conductor,eliminar = "age_cat5")
  
-# descrTable(formu,data=dades_prematch,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
-#   export2md()
+descrTable(formu,data=dades_prematch,extra.labels = c("","",""), show.p.overall = F,show.n = T) %>% 
+  export2md(format = "markdown")
 
-descrTable("sexe ~ age + age_cat4 + DG.AP + DG.AVC_H + DG.AVC_NH + DG.CI + DG.DIS + DG.HTA + DG.IC + DG.AVC + DG.PrevSec + FF.ALTRES_AAG + FF.ALTRESDIS + FF.ALTRESHTA + FF.ANT_VITK + FF.ANTCA + FF.ARA2 + FF.BBK + FF.BG_Metformina + FF.CLOPI + FF.DIPI + FF.DIURETIC + FF.ESTATINA + FF.ESTATINA_COMB + FF.EZE + FF.FIBRAT + FF.IECA + FF.AAG + FF.ANTIHTA + FF.HIPOLIP + ALCOHOL.valor + CAC.valor + cHDL.valor + CKDEPI.valor + cLDL.valor + CREATININA.valor + cT.valor + EXCPROTEINA.valor + GLICADA.valor + GLUCOSA.valor + IMC.valor + IMC.valor.cat5 + PAD.valor + PAS.valor + PES.valor + TALLA.valor + TG.valor + score2 + regicor + PA_cat + HBA1C7_cat + risc_CVD_cat + LDL55PrevS_cat + LDL70PrevS_cat + LDL100PrevS_cat + LDL100PrevP_cat + LDL130PrevP_cat + tabac.valor",data=dades_prematch,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% export2md()
+# descrTable("sexe ~ age + age_cat4 + DG.AP + DG.AVC_H + DG.AVC_NH + DG.CI + DG.DIS + DG.HTA + DG.IC + DG.AVC + DG.PrevSec + FF.ALTRES_AAG + FF.ALTRESDIS + FF.ALTRESHTA + FF.ANT_VITK + FF.ANTCA + FF.ARA2 + FF.BBK + FF.BG_Metformina + FF.CLOPI + FF.DIPI + FF.DIURETIC + FF.ESTATINA + FF.ESTATINA_COMB + FF.EZE + FF.FIBRAT + FF.IECA + FF.AAG + FF.ANTIHTA + FF.HIPOLIP + ALCOHOL.valor + CAC.valor + cHDL.valor + CKDEPI.valor + cLDL.valor + CREATININA.valor + cT.valor + EXCPROTEINA.valor + GLICADA.valor + GLUCOSA.valor + IMC.valor + IMC.valor.cat5 + PAD.valor + PAS.valor + PES.valor + TALLA.valor + TG.valor + score2 + regicor + PA_cat + HBA1C7_cat + risc_CVD_cat + LDL55PrevS_cat + LDL70PrevS_cat + LDL100PrevS_cat + LDL100PrevP_cat + LDL130PrevP_cat + tabac.valor",data=dades_prematch,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% export2md()
+
 
 
 
@@ -704,10 +720,10 @@ descrTable("sexe ~ age + age_cat4 + DG.AP + DG.AVC_H + DG.AVC_NH + DG.CI + DG.DI
 
 ```{r taula_resum, include=TRUE,echo=FALSE, warning=FALSE,eval=FALSE}
 
-formu<-formula.text("Baseline",y="",taulavariables = conductor)
+formu<-formula_text("Baseline",y="",taulavariables = conductor)
 
 descrTable(formu,data=dades,method = 2,Q1=0,Q3=1,extra.labels = c("","",""), hide = "No") %>% 
-  export2md()
+  export2md(format = "markdown")
 
 
 ```
@@ -719,12 +735,11 @@ descrTable(formu,data=dades,method = 2,Q1=0,Q3=1,extra.labels = c("","",""), hid
 ```{r comparativapre, include=TRUE,echo=FALSE, warning=FALSE}
 
 
-formu<-formula.text("Taula1",y="sexe",taulavariables = conductor)
+formu<-formula_text("Taula1",y="sexe",taulavariables = conductor)
 
 
-descrTable(formu,data=dades,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
-  export2md()
-
+descrTable(formu,data=dades,extra.labels = c("","",""), show.p.overall = T,show.n = T) %>% 
+  export2md(format = "markdown")
 
 
 
@@ -733,19 +748,18 @@ descrTable(formu,data=dades,extra.labels = c("","",""), hide = "No",show.p.overa
 ```
 
 
-```{r}
+```{r comparativapre_subgrups, include=TRUE,echo=FALSE, warning=FALSE}
 
 dt_temp<-dades %>% filter(DG.PrevSec=="Yes")
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
-  export2md()
-
+  export2md(caption = "Descriptiva per sexes. Prevenció secundaria", format = "markdown")
 
 
 dt_temp<-dades %>% filter(DG.PrevSec=="No")
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
-  export2md()
+  export2md(caption = "Descriptiva per sexes. Prevenció primaria",format = "markdown")
 
 
 
@@ -765,10 +779,10 @@ DESCRIPTIVA DEL SEGUIMENT
 
 dt_temp<-dades
 
-formu<-formula.text("farmacs_post",y="sexe",taulavariables = conductor)
+formu<-formula_text("farmacs_post",y="sexe",taulavariables = conductor)
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), show.p.overall = F,show.n = T) %>% 
-  export2md()
+  export2md(format = "markdown")
 
 
 
@@ -781,12 +795,11 @@ descrTable(formu,data=dt_temp,extra.labels = c("","",""), show.p.overall = F,sho
 
 dt_temp<-dades
 
-formu<-formula.text("vars_post",y="sexe",taulavariables = conductor)
+formu<-formula_text("vars_post",y="sexe",taulavariables = conductor)
 
 
-
-descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = F,show.n = T) %>% 
-  export2md()
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
+  export2md(format = "markdown")
 
 
 ```
@@ -798,11 +811,11 @@ descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.ove
 
 dt_temp<-dades
 
-formu<-formula.text("Outcome",y="sexe",taulavariables = conductor)
+formu<-formula_text("Outcome",y="sexe",taulavariables = conductor)
 
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
-  export2md()
+  export2md(format = "markdown")
 
 
 
@@ -815,16 +828,517 @@ descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.ove
 
 dt_temp<-dades
 
-formu<-formula.text("fxAD365",y="sexe",taulavariables = conductor)
+formu<-formula_text("fxAD365",y="sexe",taulavariables = conductor)
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
-  export2md()
+  export2md(format = "markdown")
 
 
-formu<-formula.text("fxCV365",y="sexe",taulavariables = conductor)
+formu<-formula_text("fxCV365",y="sexe",taulavariables = conductor)
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.overall = T,show.n = T) %>% 
-  export2md()
+  export2md(format = "markdown")
+
+
+```
+
+# Mal control CV
+
+
+
+```{r}
+
+
+dt_temp<-dades
+
+formu<-formula_text("Outcome",y="mal_controlCV.post",taulavariables = conductor)
+
+descrTable(mal_controlCV.post~sexe+age+ DG.PrevSec,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) %>% 
+  export2md(format = "markdown")
+
+# 
+res<-descrTable(mal_controlCV.post~sexe+age,simplify = F,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+strataTable(res,"DG.PrevSec") %>% 
+  export2md(caption = "Descriptiu comparatiu de mal control CV post estratificat per Prevenció Secundaria",format = "markdown")
+
+
+```
+
+# Table3- Cardiovascular risk ......
+
+```{r, include=TRUE}
+
+dt_temp<-dades
+descrTable(sexe ~ HBA1C7_cat.post + PA_cat.post ,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+descrTable(sexe ~ HBA1C7_cat + PA_cat,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+
+#  Prevenció Primaria (Sense Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="No") 
+#
+descrTable(sexe ~ LDL100PrevP_cat + LDL130PrevP_cat ,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+descrTable(sexe ~ LDL100PrevP.post_cat + LDL130PrevP.post_cat ,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+#  Prevenció Secundaria (Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="Yes") 
+
+descrTable(sexe ~ LDL100PrevS_cat + LDL70PrevS_cat + LDL55PrevS_cat ,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+
+descrTable(sexe ~ LDL100PrevS.post_cat + LDL70PrevS.post_cat + LDL55PrevS.post_cat ,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = F) %>% 
+  export2md(format = "markdown")
+
+
+```
+
+
+```{r funcio_ORS}
+
+Extreure_OR_ajustat<-function(dt=dt_temp, outcome="mal_controlCV.post",ajust="", codievent='Yes')
+  {
+  
+  # dt=dt_temp
+  # outcome="LDL100PrevP.post_cat"
+  # ajust=""
+  # codievent='Yes'
+
+  if (ajust=="") 
+    {formula<- formula_vector("sexe",y=paste0(outcome,"==","'",codievent,"'"))
+    vars_ajust="None"
+    } else 
+    {formula<-formula_text("ajust",y=paste0(outcome,"=='",codievent,"'"),a="sexe",taulavariables=conductor)
+    vars_ajust=extreure.variables(ajust,taulavariables = conductor) %>% paste0(collapse = ", ")
+    }
+  
+  fit<-glm(as.formula(formula), data=dt, family = binomial()) 
+  
+  fit %>% 
+    parameters::parameters(exp=T) %>% dplyr::filter(row_number()==2) %>% 
+    mutate(Outcome=outcome,Adjusted_By=vars_ajust, Nobs=nobs(fit),codievent) %>% as_tibble() %>% 
+    select(Outcome, valor=codievent, Parameter, OR=Coefficient, CI_low, CI_high, p, Adjusted_By, Nobs)
+  
+  }
+
+Extreure_OR_ajustats_grups<-function(dt=dt_temp, outcome="mal_controlCV.post",ajust="",codievent='Yes')
+  {
+  # Per grups i global
+  dt_temp1<-
+    tibble(Antecedent_CV="Overall") %>% 
+    bind_cols(Extreure_OR_ajustat(dt=dt,outcome=outcome,ajust=ajust,codievent=codievent))
+  # Per grups
+  dt_temp2<-dt %>% split(.$DG.PrevSec) %>% 
+    map_df(~Extreure_OR_ajustat(dt=.x,outcome=outcome,ajust=ajust,codievent=codievent),.id = "Antecedent_CV")
+  
+  # Fusio
+  dt_temp1 %>% bind_rows(dt_temp2)
+
+  }
+
+```
+
+# Odds ratios de bon/mal control CV post
+
+## No ajustat
+
+
+```{r}
+# dades<-dades %>% refcat(conductor,ref="ref_cat")
+
+# No ajust
+ajust<-""
+
+#  Global
+dt_temp<-dades
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes') 
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No') 
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No') 
+
+out_global<-out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% mutate(Antecedent_CV="Overall")
+
+# dt_temp %>% select(HBA1C7_cat.post,PA_cat.post,mal_controlCV.post)
+
+
+#  Prevenció Primaria (Sense Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="No") 
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes')
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No')
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No')
+out4<-Extreure_OR_ajustat(outcome="LDL100PrevP.post_cat",ajust=ajust, codievent='No')
+out5<-Extreure_OR_ajustat(outcome="LDL130PrevP.post_cat",ajust=ajust, codievent='No')
+
+out_PrevPrimaria<-out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% bind_rows(out4) %>% bind_rows(out5) %>% mutate(Antecedent_CV="No")
+
+#  Prevenció Secundaria (Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="Yes") 
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes')
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No')
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No')
+# out4<-Extreure_OR_ajustat(outcome="LDL55PrevS.post_cat",ajust=ajust, codievent='No')
+out5<-Extreure_OR_ajustat(outcome="LDL70PrevS.post_cat",ajust=ajust, codievent='No')
+out6<-Extreure_OR_ajustat(outcome="LDL100PrevS.post_cat",ajust=ajust, codievent='No')
+
+out_PrevSecundaria<-
+  out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% 
+  bind_rows(out5) %>% bind_rows(out6) %>% mutate(Antecedent_CV="Yes")
+
+# Fusió tots els resultats
+taulaORs<-tibble(Antecedent_CV=NA) %>% bind_rows(out_global) %>% bind_rows(out_PrevPrimaria) %>% bind_rows(out_PrevSecundaria) %>% na.omit()
+
+taulaORs %>% 
+  kable(caption = "Summary Odds Ratios by outcome", digits = 4) %>% 
+  kableExtra::kable_classic_2()
+
+# #
+# glm(as.formula("LDL130PrevP.post_cat=='Yes' ~ sexe"), data=dt_temp, family = binomial()) %>% 
+#    parameters::parameters(exp=T) 
+# 
+# llistat_outcomes<-read_conductor(conductor) %>% filter(Outcome>0) %>% pull(camp)
+# 
+# dt_temp %>% distinct(LDL55PrevS.post_cat)
+
+## Outcomes:
+# PA_cat.post
+# HBA1C7_cat.post
+# risc.post_CVD_cat
+
+# LDL55PrevS.post_cat
+# LDL70PrevS.post_cat
+# LDL100PrevS.post_cat
+
+# LDL100PrevP.post_cat
+# LDL130PrevP.post_cat
+
+# mal_controlCV.post
+
+
+
+
+```
+
+```{r}
+
+descrTable(mal_controlCV.post~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+descrTable(HBA1C7_cat.post~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+descrTable(PA_cat.post~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+dt_temp<-dades %>% filter(DG.PrevSec=="No")
+descrTable(LDL100PrevP.post_cat~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+
+
+#  Prevenció Secundaria (Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="Yes")
+
+descrTable(LDL55PrevS.post_cat~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+descrTable(LDL70PrevS.post_cat~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+descrTable(LDL100PrevS.post_cat~sexe,
+           data=dt_temp,extra.labels = c("","",""),show.p.overall = T,show.n = T, show.ratio = T, byrow = T) 
+
+
+
+
+```
+
+```{r forest_plot1}
+
+
+library(ggplot2)
+
+taulaORs %>% 
+  rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
+  Macedonia::fores.plot.v4(label="Y", 
+              mean="OR", lower="CI_low",upper="CI_high", 
+              nivell="Antecedent_CV",
+              factor="Antecedent_CV",
+              subtitle = "",
+              title = "Forest plot of Odds Ratio and confidence interval (95%CI)",
+              label_Favors="Men         Women",
+              caption="")+
+  ylim(-0.8,6)
+
+  
+
+```
+
+
+
+## Ajustat
+
+
+```{r}
+ajust<-"ajust"
+
+
+#  Global
+dt_temp<-dades
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes') 
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No') 
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No') 
+
+out_global<-out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% mutate(Antecedent_CV="Overall")
+
+# dt_temp %>% select(HBA1C7_cat.post,PA_cat.post,mal_controlCV.post)
+
+
+#  Prevenció Primaria (Sense Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="No") 
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes')
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No')
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No')
+out4<-Extreure_OR_ajustat(outcome="LDL100PrevP.post_cat",ajust=ajust, codievent='No')
+out5<-Extreure_OR_ajustat(outcome="LDL130PrevP.post_cat",ajust=ajust, codievent='No')
+
+out_PrevPrimaria<-out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% bind_rows(out4) %>% bind_rows(out5) %>% mutate(Antecedent_CV="No")
+
+#  Prevenció Secundaria (Antecedents CV)
+dt_temp<-dades %>% filter(DG.PrevSec=="Yes") 
+out1<-Extreure_OR_ajustat(dt=dt_temp, outcome="mal_controlCV.post",ajust=ajust,codievent='Yes')
+out2<-Extreure_OR_ajustat(dt=dt_temp, outcome="HBA1C7_cat.post",ajust=ajust,codievent = 'No')
+out3<-Extreure_OR_ajustat(dt=dt_temp, outcome="PA_cat.post",ajust=ajust,codievent = 'No')
+# out4<-Extreure_OR_ajustat(outcome="LDL55PrevS.post_cat",ajust=ajust, codievent='No')
+out5<-Extreure_OR_ajustat(outcome="LDL70PrevS.post_cat",ajust=ajust, codievent='No')
+out6<-Extreure_OR_ajustat(outcome="LDL100PrevS.post_cat",ajust=ajust, codievent='No')
+
+out_PrevSecundaria<-
+  out1 %>% bind_rows(out2) %>% bind_rows(out3) %>% 
+  bind_rows(out5) %>% bind_rows(out6) %>% mutate(Antecedent_CV="Yes")
+
+# Fusió tots els resultats
+taulaORs<-tibble(Antecedent_CV=NA) %>% bind_rows(out_global) %>% bind_rows(out_PrevPrimaria) %>% bind_rows(out_PrevSecundaria) %>% na.omit()
+
+taulaORs %>% 
+  kable(caption = "Summary Odds Ratios by outcome", digits = 4) %>% 
+  kableExtra::kable_classic_2()
+
+
+
+# #
+
+
+```
+
+```{r forest_plot2}
+
+Ajustatper<-extreure.variables("ajust", conductor) %>% etiquetar_vector(taulavariables = conductor) %>% paste0(collapse = ", ")
+
+taulaORs %>% 
+  rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
+  Macedonia::fores.plot.v4(label="Y", 
+              mean="OR", lower="CI_low",upper="CI_high", 
+              nivell="Antecedent_CV",
+              factor="Antecedent_CV",
+              subtitle = "",
+              title = "Forest plot of Odds Ratio and confidence interval (95%CI)",
+              label_Favors="Men          Women",
+              caption=paste0("Adjusted by: ", Ajustatper))+
+  ylim(-0.8,6)
+
+  
+
+```
+
+
+
+
+# Coeficients outcomes continus control CV post bettween men and women
+
+- score2_dif
+- score2.post
+- PAD.valor.post
+- PAS.valor.post
+- IMC.valor.post
+- cLDL.valor.post
+- cHDL.valor.post
+- GLICADA.valor.post
+
+```{r}
+
+Extreure_COEF_ajustat<-function(dt=dt_temp, outcome="score2_dif",ajust="")
+  {
+  
+  # dt<-dt_temp %>% filter(DG.PrevSec=="No") %>% select(score2_dif)
+  # Extreure_COEF_ajustat(dt,outcome="score2_dif",ajust=ajust)
+
+  # dt=dt_temp %>% filter(DG.PrevSec=="Yes") 
+  # outcome="score2_dif"
+  # ajust=""
+
+  if (ajust=="") 
+    {formula<- formula_vector("sexe",y=outcome)
+    vars_ajust="None"
+    } else 
+    {formula<-formula_text("ajust",y=outcome,a="sexe",taulavariables=conductor)
+    vars_ajust=extreure.variables(ajust,taulavariables = conductor) %>% paste0(collapse = ", ")
+    }
+  
+  fit<-glm(as.formula(formula), data=dt,family = gaussian) %>% tryCatch(error = function(e) {})
+  
+  if (!is.null(fit)) {
+  
+  fit %>% 
+    parameters::parameters() %>% dplyr::filter(row_number()==2) %>% 
+    mutate(Outcome=outcome,Adjusted_By=vars_ajust, Nobs=nobs(fit)) %>% as_tibble() %>% 
+    select(Outcome, Parameter, Coefficient, CI_low, CI_high, p, Adjusted_By, Nobs)
+    } 
+    
+  }
+
+
+# Prevenció primaria / Secundaria  
+Extreure_COEF_ajustat_ACV<-function(dt=dt_temp,outcome=outcome,ajust=ajust) {
+  # dt=dt_temp
+  # outcome="PAD.valor.post"
+  # ajust=ajust
+  
+  dt_temp1<-Extreure_COEF_ajustat(dt,outcome=outcome,ajust=ajust) %>% mutate(Antecedent_CV="Overall") %>% relocate(Antecedent_CV,Outcome)
+  dt_temp2<-dt %>% split(.$DG.PrevSec) %>% purrr::map_df(
+            ~ Extreure_COEF_ajustat(.x,outcome=outcome,ajust=ajust),
+            .id="Antecedent_CV")
+  
+  if (count(dt_temp2) %>% pull(n) >1) dt_temp1 %>% bind_rows(dt_temp2) else dt_temp2
+  
+  }
+
+
+
+```
+
+
+## No ajustats 
+
+- Taula
+
+```{r}
+
+dt_temp<-dades
+
+ajust=""
+
+# - score2_dif
+# - score2.post
+# - PAD.valor.post
+# - PAS.valor.post
+# - IMC.valor.post
+# - cLDL.valor.post
+# - cHDL.valor.post
+# - GLICADA.valor.post
+
+library(purrr)
+
+vars_eval<-c("score2_dif","score2.post","PAD.valor.post","PAS.valor.post","IMC.valor.post","cLDL.valor.post","GLICADA.valor.post")
+
+taulaBetas<-
+  vars_eval %>% 
+  purrr::map_df(~Extreure_COEF_ajustat_ACV(dt=dt_temp,outcome=.x,ajust=ajust)) 
+
+taulaBetas %>% 
+  kable(digits = 3, caption = "Coeficients for outcomes between Men and women") %>% 
+  kableExtra::kable_classic_2()
+
+
+
+```
+
+- Figura forest Plot
+
+```{r}
+
+taulaBetas %>% 
+  rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
+  Macedonia::fores.plot.v4(label="Y", 
+              mean="Coefficient", lower="CI_low",upper="CI_high", 
+              nivell="Antecedent_CV",
+              factor="Antecedent_CV",
+              subtitle = "",
+              title = "Forest plot of coefficients and confidence interval (95% CI)",
+              label_Favors="Favors Men         Favors Women",
+              caption=paste0("Adjusted by: ", Ajustatper),
+              intercept = 0) + 
+  ggplot2::ylim(-8,6)
+
+# +ggplot2::ylim(-0.8,6)
+
+
+```
+
+## Ajustats
+
+```{r}
+
+dt_temp<-dades
+
+ajust="ajust"
+
+# - score2_dif
+# - score2.post
+# - PAD.valor.post
+# - PAS.valor.post
+# - IMC.valor.post
+# - cLDL.valor.post
+# - cHDL.valor.post
+# - GLICADA.valor.post
+
+vars_eval<-c("score2_dif","score2.post","PAD.valor.post","PAS.valor.post","IMC.valor.post","cLDL.valor.post","GLICADA.valor.post")
+
+
+taulaBetas<-
+  vars_eval %>% 
+  purrr::map_df(~Extreure_COEF_ajustat_ACV(dt=dt_temp,outcome=.x,ajust=ajust)) 
+
+taulaBetas %>% 
+  kable(digits = 3, caption = "Coeficients for outcomes between Men and women") %>% 
+  kableExtra::kable_classic_2()
+
+```
+
+
+
+- Figura forest Plot
+
+```{r}
+
+taulaBetas %>% 
+  rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
+  Macedonia::fores.plot.v4(label="Y", 
+              mean="Coefficient", lower="CI_low",upper="CI_high", 
+              nivell="Antecedent_CV",
+              factor="Antecedent_CV",
+              subtitle = "",
+              title = "Forest plot of coefficients and confidence interval (95% CI)",
+              label_Favors="Favors Men         Favors Women",
+              caption=paste0("Adjusted by: ", Ajustatper),
+              intercept = 0) + 
+  ggplot2::ylim(-8,6)
+
+
+# +ggplot2::ylim(-0.8,6)
+
 
 
 ```
@@ -832,13 +1346,9 @@ descrTable(formu,data=dt_temp,extra.labels = c("","",""), hide = "No",show.p.ove
 
 
 ```{r, eval=FALSE}
-
 # Figura de l'evolutiu DE VALORS
 
-
-dades %>% select(sexe,score2,score2.post,score2_dif, situacio) %>% na.omit() %>% 
-  
-
+dades %>% select(sexe,score2,score2.post,score2_dif, situacio) %>% na.omit()  
 
 ggplot2::ggplot()
 
@@ -874,7 +1384,7 @@ temp4<-temp1 %>% bind_cols(temp2) %>% left_join(temp3,by="grup")
 temp4 %>% 
    ggplot(aes(x=data,y=LDL,color=grup)) + 
    geom_line() +
-   ylim(c(7,8.5)) + 
+   # ylim(c(7,8.5)) + 
    geom_segment(aes(x =data0, xend=dataUltimHB, y =valorfinalHB-0.10, yend = valorfinalHB-0.10),size=10.5,alpha = 0.1) +
    geom_point(aes(x=data_inclusio, y=valorfinalHB), size=4)
 
@@ -883,6 +1393,14 @@ temp4 %>%
 ```
 
 
+```{r eval=FALSE}
+
+vars_eval<-c("score2_dif","score2.post","PAD.valor.post","PAS.valor.post","IMC.valor.post","cLDL.valor.post","GLICADA.valor.post")
+
+dades %>% group_by(sexe) %>% summarise_at(vars_eval,~mean(.,na.rm=T))
+
+
+```
 
 
 &nbsp;

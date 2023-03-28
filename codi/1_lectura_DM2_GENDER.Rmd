@@ -129,7 +129,7 @@ dt_temp2<-
   
 # 
 dt_index<-
-  dt_temp %>% bind_rows(dt_temp) %>% 
+  dt_temp %>% bind_rows(dt_temp2) %>% 
   arrange(idp,dat) %>% group_by(idp) %>% slice(1) %>% ungroup() %>% select(idp,dtindex=dat) %>% 
   filter(dtindex>=20170101 & dtindex<=20171231)
 

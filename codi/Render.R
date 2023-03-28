@@ -9,8 +9,6 @@ rmarkdown::render(input=here::here("codi","1_lectura_DM2_GENDER.Rmd"),
                   params = list(fitxers_test= mostra))
 
 
-
-
 gc()
 rm(list=ls())
 mostra=F
