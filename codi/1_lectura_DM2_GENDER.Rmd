@@ -108,13 +108,17 @@ dt_cmbdh_proc2<-fread(here::here(dir_dades,fitxer))
 ```
 
 
+
+
+
+
+
 ```{r generacio_dtindex}
 # Llegir cataleg
 dt_cataleg<-readxl::read_excel(here::here(fitxer_cataleg))
 
 # Selecciono codis DM2 
 codis_dm2<-dt_cataleg %>% filter(AGR1=="DM2") %>% select(domini,cod,agr=AGR1)
-
 
 # diagnosticats DM2 per e-cap  
 dt_temp<-
@@ -184,11 +188,13 @@ taula_plana<-
 
 ```{r fusio}
 
+
 # Fusiono amb dades
 dt_plana<-
   dt_index %>% 
   left_join(dt_poblacio,by=c("idp")) %>% 
   left_join(taula_plana,by=c("idp","dtindex")) 
+
 
 
 

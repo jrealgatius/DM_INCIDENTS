@@ -32,6 +32,15 @@ params:
 
 # Estat
 
+## Última actualització 
+
+**28/03/2023**
+
+- Eliminar aparellament del anàlisi
+
+
+## Fet 
+
 - Lectura de fitxers
 - Generació d'agregadors
 - Agregació de fitxers i fusió de taules
@@ -95,11 +104,6 @@ if (params$fitxers_test) {
 dades<-readRDS(here::here(dir_dades_prep,"dt_plana.rds"))
 
 
-```
-
-
-```{r eval=FALSE}
-
 names(dades) %>% write.csv2("vars.csv")
 
 
@@ -121,7 +125,24 @@ dades<-dades %>% mutate_at(vars(starts_with("DG.")),~if_else(.>0,"Yes","No",miss
 # farmacs
 dades<-dades %>% mutate_at(vars(starts_with("FF.")),~if_else(.>0,"Yes","No",missing = "No"))
 
-#
+# Events
+dades<-dades %>% mutate_at(vars(starts_with("event.")),~if_else(.>0,"Yes","No",missing = "No"))
+
+
+```
+
+
+```{r DG_combinats, include=FALSE}
+
+
+dades<-
+  dades %>% #select(DG.HTA,FF.ANTIHTA, DG.DIS,FF.HIPOLIP) %>% 
+  mutate(DG.FF.HTA=if_else(DG.HTA=="Yes" | FF.ANTIHTA=="Yes","Yes","No"), 
+         DG.FF.DIS=if_else(DG.DIS=="Yes" | FF.HIPOLIP=="Yes","Yes","No"))
+
+# DG.HTA_FX
+
+# dades %>% select(DG.FF.HTA, DG.FF.DIS)
 
 
 
@@ -344,14 +365,14 @@ dades<-dt_temp
 
 ```{r}
 
-# Categorias de riesgo CV (Alt-Molt alt, Moderat): 
+# Categorias de riesgo CV (Molt alt, Moderat, No classificat): 
 
 dt_temp<-
   dades %>% 
-  select(idp,age, DG.HTA, DG.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP) %>% 
+  select(idp,age, DG.FF.HTA, DG.FF.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP,DG.RTP_DM) %>% 
   mutate(frisc1=if_else(age>50,1,0,missing = 0),
-         frisc2=if_else(DG.HTA=="Yes",1,0,missing = 0),
-         frisc3=if_else(DG.DIS=="Yes",1,0,missing = 0),
+         frisc2=if_else(DG.FF.HTA=="Yes",1,0,missing = 0),
+         frisc3=if_else(DG.FF.DIS=="Yes",1,0,missing = 0),
          frisc4=if_else(tabac.valor==1,1,0,missing = 0),
          frisc5=if_else(IMC.valor>=30,1,0,missing = 0)) %>% 
   mutate(num_frisc=frisc1+frisc2+frisc3+frisc4+frisc5) %>% 
@@ -359,19 +380,24 @@ dt_temp<-
   mutate(
     risc_CVD_cat=case_when(
     
-    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor>300 | CKDEPI.valor<30) |
+    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor>300 | CKDEPI.valor<30 | DG.RTP_DM=="Yes") | num_frisc>=3~2,
     
-    num_frisc>=3~1, 
+    age<=50 & num_frisc==0 & DG.AVC=="No" & DG.CI=="No" & DG.RTP_DM=="No" & DG.AP=="No" & (CAC.valor<=300 | is.na(CAC.valor)) & (CKDEPI.valor>=30 | is.na(CKDEPI.valor)) ~ 1, 
     
     TRUE~0
     )
     ) %>% 
   
-  select(idp,num_frisc,risc_CVD_cat,age, DG.HTA, DG.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP ) %>% 
+  select(idp,num_frisc,risc_CVD_cat,age, DG.FF.HTA, DG.FF.DIS , tabac.valor, IMC.valor, CAC.valor, CKDEPI.valor, DG.AVC, DG.CI, DG.AP) %>% 
   select(idp,risc_CVD_cat)
 
 
 dades<-dades %>% left_join(dt_temp,by="idp")
+
+
+# risc_CVD_cat: 1. "Molt alt risc " 2. "Moderat risc" 0. No classificats
+
+
 
 
 ```
@@ -383,10 +409,10 @@ dades<-dades %>% left_join(dt_temp,by="idp")
 
 dt_temp<-
   dades %>% 
-  select(idp,age, DG.HTA, DG.DIS , tabac.valor.post, IMC.valor.post, CAC.valor.post, CKDEPI.valor.post, DG.AVC, DG.CI, DG.AP) %>% 
+  select(idp,age, DG.FF.HTA, DG.FF.DIS , tabac.valor.post, IMC.valor.post, CAC.valor.post, CKDEPI.valor.post, DG.AVC, DG.CI, DG.AP,DG.RTP_DM) %>% 
   mutate(frisc1=if_else(age+1>50,1,0,missing = 0),
-         frisc2=if_else(DG.HTA=="Yes",1,0,missing = 0),
-         frisc3=if_else(DG.DIS=="Yes",1,0,missing = 0),
+         frisc2=if_else(DG.FF.HTA=="Yes",1,0,missing = 0),
+         frisc3=if_else(DG.FF.DIS=="Yes",1,0,missing = 0),
          frisc4=if_else(tabac.valor.post==1,1,0,missing = 0),
          frisc5=if_else(IMC.valor.post>=30,1,0,missing = 0)) %>% 
   mutate(num_frisc=frisc1+frisc2+frisc3+frisc4+frisc5) %>% 
@@ -394,14 +420,18 @@ dt_temp<-
   mutate(
     risc.post_CVD_cat=case_when(
     
-    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor.post>300 | CKDEPI.valor.post<30) |
+    (DG.AVC=="Yes" | DG.CI=="Yes" | DG.AP=="Yes" | CAC.valor.post>300 | CKDEPI.valor.post<30) | num_frisc>=3~2, 
     
-    num_frisc>=3~1, 
+    
+    age+1<=50 & num_frisc==0 & DG.AVC=="No" & DG.CI=="No" & DG.RTP_DM=="No" & DG.AP=="No" & (CAC.valor.post<=300 | is.na(CAC.valor.post)) & (CKDEPI.valor.post>=30 | is.na(CKDEPI.valor.post)) ~ 1, 
+    
+    
     TRUE~0
     ) ) %>% select(idp,risc.post_CVD_cat)
 
 
 dades<-dades %>% left_join(dt_temp,by="idp")
+
 
 
 
@@ -638,7 +668,7 @@ dades<-dades %>% left_join(select(dadesMatch,idp,ps=weights),by="idp")
 
 
 
-# Flow - chart post paired 
+# Flow - chart pre-paired 
 
 ```{r}
 
@@ -649,11 +679,12 @@ dt_temp<-dades
 #                                      criteris = "aparellament",ordre = "id",etiquetes = "descripcio",sequencial=F,
 #                                      grups="sexe")
 
+dt_temp <-dt_temp %>% mutate(sexe=as.character(sexe)) 
 
 dt_temp %>% 
   ggflowchart::Generar_flow_chart_consort(taulavariables =here::here("Conductor.xls"),
                              sheet="criteris_exclusio",
-                             criteris = "exclusio2",
+                             criteris = "exclusio1",
                              grups = "sexe",
                              labels = "descripcio",
                              lab_start = "Mostra elegible",
@@ -688,9 +719,25 @@ dades %>% foreign::write.dta(here::here("dades/compartides","dades_dm.dta"))
 dades %>% writexl::write_xlsx(here::here("dades/compartides","dades_dm.xlsx"))
 
 
+dades_prematch %>% foreign::write.dta(here::here("dades/compartides","dades_dm_prematch.dta"))
+
+dades_prematch %>% writexl::write_xlsx(here::here("dades/compartides","dades_dm_prematch.xlsx"))
+
 
 
 ```
+
+
+```{r}
+
+#CAnvi de matriu de dades .
+
+# S'elimina l'aparellament i es fa l'analisis amb tota la mostra
+
+dades<-dades_prematch
+
+```
+
 
 
 # Descriptiu exploratori de variables generades 
@@ -730,7 +777,7 @@ descrTable(formu,data=dades,method = 2,Q1=0,Q3=1,extra.labels = c("","",""), hid
 
 
 
-# Comparativa per generes post aparellament
+# Comparativa per generes
 
 ```{r comparativapre, include=TRUE,echo=FALSE, warning=FALSE}
 
@@ -782,6 +829,22 @@ dt_temp<-dades
 formu<-formula_text("farmacs_post",y="sexe",taulavariables = conductor)
 
 descrTable(formu,data=dt_temp,extra.labels = c("","",""), show.p.overall = F,show.n = T) %>% 
+  export2md(format = "markdown")
+
+
+
+```
+
+
+## Events CV post (1 any després del debut de la diabetis)
+
+```{r include=TRUE,echo=FALSE, warning=FALSE}
+
+dt_temp<-dades
+
+formu<-formula_text("eventsCV",y="sexe",taulavariables = conductor)
+
+descrTable(formu,data=dt_temp,extra.labels = c("","",""), show.p.overall = T,show.n = T, hide = "No") %>% 
   export2md(format = "markdown")
 
 
@@ -1072,7 +1135,7 @@ library(ggplot2)
 
 taulaORs %>% 
   rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
-  Macedonia::fores.plot.v4(label="Y", 
+  fores.plot.v4(label="Y", 
               mean="OR", lower="CI_low",upper="CI_high", 
               nivell="Antecedent_CV",
               factor="Antecedent_CV",
@@ -1082,7 +1145,8 @@ taulaORs %>%
               caption="")+
   ylim(-0.8,6)
 
-  
+
+
 
 ```
 
@@ -1149,7 +1213,7 @@ Ajustatper<-extreure.variables("ajust", conductor) %>% etiquetar_vector(taulavar
 
 taulaORs %>% 
   rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
-  Macedonia::fores.plot.v4(label="Y", 
+  fores.plot.v4(label="Y", 
               mean="OR", lower="CI_low",upper="CI_high", 
               nivell="Antecedent_CV",
               factor="Antecedent_CV",
@@ -1271,7 +1335,7 @@ taulaBetas %>%
 
 taulaBetas %>% 
   rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
-  Macedonia::fores.plot.v4(label="Y", 
+  fores.plot.v4(label="Y", 
               mean="Coefficient", lower="CI_low",upper="CI_high", 
               nivell="Antecedent_CV",
               factor="Antecedent_CV",
@@ -1325,7 +1389,7 @@ taulaBetas %>%
 
 taulaBetas %>% 
   rename(Y=Outcome) %>% etiquetar_taula(camp = "Y", taulavariables = conductor) %>% 
-  Macedonia::fores.plot.v4(label="Y", 
+  fores.plot.v4(label="Y", 
               mean="Coefficient", lower="CI_low",upper="CI_high", 
               nivell="Antecedent_CV",
               factor="Antecedent_CV",
